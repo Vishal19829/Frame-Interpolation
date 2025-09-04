@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Frame Interpolation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0F172A; /* slate-900 */
+            background-image: radial-gradient(circle at top left, #4f46e530, transparent 40%),
+                              radial-gradient(circle at bottom right, #7c3aed30, transparent 40%);
+        }
+        .card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .processing-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .shimmer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: shimmer-animation 2s infinite;
+        }
+        @keyframes shimmer-animation { 100% { transform: translateX(100%); } }
+        .drop-zone {
+            border: 2px dashed #475569;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .drop-zone.dragover {
+            background-color: #1e293b80;
+            border-color: #6366f1;
+        }
+        #video-upload {
+            opacity: 0;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen items-center justify-center p-4 selection:bg-violet-500/30">
+
+    <div class="w-full max-w-7xl mx-auto space-y-8">
+        
+        <header class="text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+                AI <span class="bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-indigo-400">Frame Interpolation</span>
+            </h1>
+            <p class="text-slate-400 mt-3 max-w-2xl mx-auto">
+                Double your video's framerate for buttery-smooth motion using reliable frame blending technology.
+            </p>
+        </header>
+
+        <div class="card rounded-2xl p-6 md:p-8">
+            <label for="video-upload" class="drop-zone relative flex flex-col items-center justify-center w-full h-48 rounded-lg cursor-pointer hover:bg-slate-800/50">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                    <svg class="w-10 h-10 mb-4 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
+                    <p class="mb-2 text-sm text-slate-400"><span class="font-semibold text-slate-300">Click to upload</span> or drag and drop</p>
+                    <p id="file-name" class="text-xs text-slate-500">MP4, MOV, WEBM, etc.</p>
+                </div>
+                <input type="file" id="video-upload" accept="video/*"/>
+            </label>
+            <div id="progress-container" class="mt-6 w-full max-w-md mx-auto hidden">
+                <div class="flex justify-between mb-1">
+                    <span id="progress-label" class="text-sm font-medium text-slate-300">Processing...</span>
+                    <span id="progress-percent" class="text-sm font-medium text-slate-300">0%</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-violet-600 h-2.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="results-section" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="card rounded-2xl p-6">
+                 <h2 class="text-2xl font-bold text-white mb-4 text-center">Video Output</h2>
+                 <div class="grid grid-cols-1 gap-6">
+                    <div>
+                        <h3 class="font-semibold mb-2 text-center text-slate-300">Original</h3>
+                        <video id="original-video" controls muted playsinline class="w-full aspect-video rounded-lg bg-black"></video>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold mb-2 text-center text-slate-300">Interpolated (2x Frames)</h3>
+                        <video id="result-video" controls muted playsinline class="w-full aspect-video rounded-lg bg-black"></video>
+                    </div>
+                 </div>
+                 <div class="text-center mt-6">
+                    <button id="interpolate-btn" class="flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-full transition duration-300 ease-in-out disabled:bg-violet-800/50 disabled:cursor-not-allowed transform hover:scale-105 mx-auto" disabled>
+                        <span>Interpolate Video</span>
+                    </button>
+                    <a id="download-btn" class="hidden items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full transition duration-300 ease-in-out transform hover:scale-105" href="#" download="interpolated-video.webm">
+                        <span>Download Result</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="card rounded-2xl p-6 space-y-6">
+                <h2 class="text-2xl font-bold text-white mb-4 text-center">How It Works</h2>
+                <div class="space-y-4 text-sm text-slate-300">
+                    <p>This tool uses a technique called **frame blending** to create new, intermediate video frames. It's a simple yet effective form of interpolation.</p>
+                    <ol class="list-decimal list-inside space-y-2 pl-2">
+                        <li>**Frame Extraction:** The app carefully extracts every frame from your uploaded video.</li>
+                        <li>**Blending:** For each pair of consecutive frames, a new frame is generated by averaging the pixel colors of the two original frames.</li>
+                        <li>**Reassembly:** The original frames and the new, blended frames are stitched back together into a new video with double the frame rate.</li>
+                    </ol>
+                    <p>This process happens entirely in your browser. Your video is never uploaded to a server.</p>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center text-slate-500 text-sm mt-8 pb-4">
+            <p>Powered by JavaScript. All processing is done securely in your browser.</p>
+        </footer>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const dropZone = document.querySelector('.drop-zone'), fileNameEl = document.getElementById('file-name'), videoUpload = document.getElementById('video-upload');
+        const resultsSection = document.getElementById('results-section'), progressContainer = document.getElementById('progress-container'), progressLabel = document.getElementById('progress-label'), progressPercent = document.getElementById('progress-percent'), progressBar = document.getElementById('progress-bar');
+        const interpolateBtn = document.getElementById('interpolate-btn'), downloadBtn = document.getElementById('download-btn');
+        const originalVideo = document.getElementById('original-video'), resultVideo = document.getElementById('result-video');
+        let sourceVideoFile = null;
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('video/')) {
+                videoUpload.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+        videoUpload.addEventListener('change', (event) => handleFileSelect(event.target.files[0]));
+        interpolateBtn.addEventListener('click', handleInterpolation);
+
+        // --- UI Handlers ---
+        function handleFileSelect(file) {
+            if (!file) return;
+            sourceVideoFile = file;
+            originalVideo.src = URL.createObjectURL(sourceVideoFile);
+            originalVideo.load();
+            fileNameEl.textContent = sourceVideoFile.name;
+            resultsSection.classList.remove('hidden');
+            interpolateBtn.disabled = false;
+            interpolateBtn.classList.remove('hidden');
+            resultVideo.src = '';
+            downloadBtn.classList.add('hidden');
+            progressContainer.classList.add('hidden');
+            updateProgress(0, 'Waiting for action...');
+        }
+
+        function updateProgress(percent, label) {
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = `${percent}%`;
+            progressPercent.textContent = `${Math.round(percent)}%`;
+            progressLabel.textContent = label;
+            progressBar.classList.remove('bg-red-500', 'bg-green-500');
+            if (label.startsWith('Error')) progressBar.classList.add('bg-red-500');
+            if (label.startsWith('Complete')) progressBar.classList.add('bg-green-500');
+        }
+
+        function setProcessingState(isProcessing) {
+            interpolateBtn.disabled = isProcessing;
+            videoUpload.disabled = isProcessing;
+
+            if (isProcessing) {
+                 interpolateBtn.innerHTML = `<div class="processing-indicator"></div><span class="ml-2">Processing...</span>`;
+            } else {
+                interpolateBtn.innerHTML = `<span>Interpolate Video</span>`;
+            }
+        }
+
+        // --- Main Processing Logic ---
+        async function handleInterpolation() {
+            if (!sourceVideoFile) return;
+            setProcessingState(true);
+            downloadBtn.classList.add('hidden');
+            interpolateBtn.classList.remove('hidden');
+            resultVideo.src = '';
+
+            try {
+                const frames = await extractFramesFromVideo(sourceVideoFile, (p) => updateProgress(p * 33.3, 'Step 1: Extracting frames...'));
+                updateProgress(33.3, 'Step 2: Blending frames...');
+                await new Promise(resolve => setTimeout(resolve, 50)); // UI update delay
+                const interpolatedFrames = interpolateFrames(frames);
+                updateProgress(66.6, 'Step 3: Assembling new video...');
+                const videoBlob = await createVideoFromFrames(interpolatedFrames, 60);
+
+                resultVideo.src = URL.createObjectURL(videoBlob);
+                downloadBtn.href = resultVideo.src;
+                downloadBtn.classList.remove('hidden');
+                interpolateBtn.classList.add('hidden');
+                updateProgress(100, `Complete! ${interpolatedFrames.length} frames created.`);
+
+            } catch (error) {
+                console.error("Interpolation failed:", error);
+                updateProgress(100, `Error: ${error.message}`);
+            } finally {
+                setProcessingState(false);
+            }
+        }
+
+        // --- Video Processing Utilities ---
+        function extractFramesFromVideo(videoFile, onProgress) {
+            return new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const frames = [];
+
+                video.preload = 'auto';
+                video.muted = true;
+                video.src = URL.createObjectURL(videoFile);
+
+                video.onloadeddata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const duration = video.duration;
+
+                    // FIX: Check for static images or very short videos
+                    // If the video is shorter than 2 frames, it cannot be interpolated.
+                    if (duration < (2 / 30)) { // Assuming 30fps base, check for less than 2 frames
+                        URL.revokeObjectURL(video.src);
+                        return reject(new Error("Cannot interpolate a static image or a video shorter than 2 frames."));
+                    }
+
+                    const frameRate = 30; // A reasonable assumption for web video
+                    const interval = 1 / frameRate;
+                    let currentTime = 0;
+
+                    video.onseeked = async () => {
+                        if (currentTime < duration) {
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            frames.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                            currentTime += interval;
+                            video.currentTime = currentTime;
+                            if (onProgress) onProgress(currentTime / duration);
+                        } else {
+                            URL.revokeObjectURL(video.src);
+                            resolve(frames);
+                        }
+                    };
+                    video.currentTime = 0; // Start the seeking process
+                };
+                video.onerror = (e) => {
+                    URL.revokeObjectURL(video.src);
+                    reject(new Error("Failed to load video. It might be in an unsupported format."));
+                };
+            });
+        }
+
+        function interpolateFrames(originalFrames) {
+            const newFrames = [];
+            if (originalFrames.length < 2) return originalFrames;
+
+            const width = originalFrames[0].width;
+            const height = originalFrames[0].height;
+            
+            for (let i = 0; i < originalFrames.length - 1; i++) {
+                newFrames.push(originalFrames[i]);
+                const frameA = originalFrames[i];
+                const frameB = originalFrames[i + 1];
+                const interpolatedFrame = new ImageData(width, height);
+                const dataA = frameA.data;
+                const dataB = frameB.data;
+                const newData = interpolatedFrame.data;
+
+                for (let j = 0; j < dataA.length; j += 4) {
+                    newData[j] = (dataA[j] + dataB[j]) / 2;       // Red
+                    newData[j + 1] = (dataA[j + 1] + dataB[j + 1]) / 2; // Green
+                    newData[j + 2] = (dataA[j + 2] + dataB[j + 2]) / 2; // Blue
+                    newData[j + 3] = 255;                         // Alpha
+                }
+                newFrames.push(interpolatedFrame);
+            }
+            newFrames.push(originalFrames[originalFrames.length - 1]);
+            return newFrames;
+        }
+
+        function createVideoFromFrames(frames, fps) {
+            return new Promise((resolve, reject) => {
+                if (!frames || frames.length === 0) {
+                    return reject(new Error("No frames provided to create video."));
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = frames[0].width;
+                canvas.height = frames[0].height;
+                const ctx = canvas.getContext('2d');
+                const stream = canvas.captureStream(fps);
+                const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    resolve(blob);
+                };
+                
+                mediaRecorder.onerror = (e) => {
+                    reject(new Error("MediaRecorder error: " + e.error));
+                };
+
+                mediaRecorder.start();
+
+                let frameIndex = 0;
+                function drawFrame() {
+                    if (frameIndex < frames.length) {
+                        ctx.putImageData(frames[frameIndex], 0, 0);
+                        frameIndex++;
+                        requestAnimationFrame(drawFrame);
+                    } else {
+                        mediaRecorder.stop();
+                    }
+                }
+                drawFrame();
+            });
+        }
+    </script>
+</body>
+</html>
